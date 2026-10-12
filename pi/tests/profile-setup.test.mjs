@@ -14,9 +14,9 @@ test('this repository is a DevOps profile root and setup points packages at pi/'
   assert.equal(settings.packages[1], 'npm:other');
 });
 
-test('the network menu row is present only when the map names a launcher', () => {
-  const plain = menuEntries({ lab: {} }).map(([key]) => key);
-  const lab = menuEntries({ lab: { launcher: 'launcher.sh' } }).map(([key]) => key);
+test('the network menu row is present only when the map lists a netns profile', () => {
+  const plain = menuEntries({ network: { profiles: [] } }).map(([key]) => key);
+  const lab = menuEntries({ network: { profiles: [{ id: 'wg', kind: 'netns', label: 'WireGuard' }] } }).map(([key]) => key);
   assert.equal(plain.includes('5'), false);
   assert.equal(lab.includes('5'), true);
   assert.equal(plain.includes('9'), true);

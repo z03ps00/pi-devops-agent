@@ -139,7 +139,7 @@ function mountFooter(ctx: any, pi?: ExtensionAPI) {
         if (alignChatTree(tui, paints, { visibleWidth, truncateToWidth })) tui.requestRender?.();
         const snap = collectSnapshot(ctx, footerData, pi);
         view = composeWorkFooter(snap, width);
-        const modeWord = ({ ask: "Вопрос", plan: "Планирование", build: "Реализация" } as Record<string, string>)[String(snap.mode || "ask")] || "";
+        const modeWord = ({ ask: "Ask", plan: "Plan", build: "Build" } as Record<string, string>)[String(snap.mode || "ask")] || "";
         return view.lines.map((line: { kind: string; text: string }) => {
           if (line.kind === "title") return truncateToWidth(colorize(theme, "accent", line.text), Math.max(1, width));
           if (line.kind === "rule") return truncateToWidth(colorize(theme, "dim", line.text), Math.max(1, width));

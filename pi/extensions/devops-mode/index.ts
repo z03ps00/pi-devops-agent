@@ -60,20 +60,35 @@ function sessionLocal() {
   return resolveLocal(process.env, process.cwd());
 }
 
-/** Preference file for the next launch. This process keeps the mode it started with. */
-function networkMode(local: any = sessionLocal()): string {
-  try {
-    const value = fs.readFileSync(local.netModeFile, "utf8").trim();
-    return value === "direct" ? "direct" : "awg";
-  } catch {
-    return "awg";
-  }
-}
+type SessionNetwork = {
+  id: string;
+  label: string;
+  kind: "host" | "netns";
+  footerLabel: string;
+  proxy: string;
+  proxyAllow: string;
+};
 
-function resolveNetworkMode(local: any = sessionLocal()): "awg" | "direct" {
-  const env = (process.env.PI_DEVOPS_NET_MODE ?? "").trim().toLowerCase();
-  if (env === "direct" || env === "awg") return env;
-  return networkMode(local) === "direct" ? "direct" : "awg";
+const HOST_NETWORK: SessionNetwork = {
+  id: "host",
+  label: "host",
+  kind: "host",
+  footerLabel: "",
+  proxy: "",
+  proxyAllow: "",
+};
+
+function pinFromLocal(local: any): SessionNetwork {
+  const active = local?.network?.active || {};
+  const kind = active.kind === "netns" ? "netns" : "host";
+  return {
+    id: String(active.id || "host"),
+    label: String(active.label || "host"),
+    kind,
+    footerLabel: String(local?.network?.footerLabel || ""),
+    proxy: String(active.proxy || ""),
+    proxyAllow: String(active.proxyAllow || ""),
+  };
 }
 
 function dashboardLine(local: any): string {
@@ -84,18 +99,16 @@ function dashboardLine(local: any): string {
   return "dashboard artifacts (" + listed + ", skill `" + skill + "`)";
 }
 
-function networkNote(local: any = sessionLocal()): string {
-  const net = sessionNetMode ?? resolveNetworkMode(local);
-  if (net !== "awg") {
-    return "\n\n# Network mode\nCurrent Pi DevOps network mode: direct (host). docker, virsh and apt are available.";
+function networkNote(pin: SessionNetwork = pinSessionNetwork()): string {
+  if (pin.kind !== "netns") {
+    return "\n\n# Network profile\nCurrent network profile: host. docker, virsh and apt are available.";
   }
-  const proxy = typeof local?.lab?.dockerProxy === "string" ? local.lab.dockerProxy : "";
-  const allow = typeof local?.lab?.dockerProxyAllow === "string" ? local.lab.dockerProxyAllow : "";
-  if (!proxy) {
-    return "\n\n# Network mode\nCurrent Pi DevOps network mode: awg (kill switch). Host docker, virsh and apt may be unavailable in this namespace. Do not bypass isolation.";
+  const label = pin.label || pin.id;
+  if (!pin.proxy) {
+    return `\n\n# Network profile\nCurrent network profile: ${label}. The agent is in a network namespace. Host docker, virsh and apt may be unavailable. Do not bypass isolation.`;
   }
-  const allowLine = allow ? ", allowlist `" + allow + "`" : "";
-  return "\n\n# Network mode\nCurrent Pi DevOps network mode: awg (kill switch). Docker goes through the filtered proxy (`" + proxy + "`" + allowLine + "): ordinary Engine API calls behave like direct, while host network, privileged, a docker.sock bind and exec into a host-net container are denied by design (403). Never bypass the proxy. virsh, apt and host systemctl still need the direct profile mode.";
+  const allowLine = pin.proxyAllow ? ", allowlist `" + pin.proxyAllow + "`" : "";
+  return `\n\n# Network profile\nCurrent network profile: ${label}. Docker goes through the filtered proxy (\`${pin.proxy}\`${allowLine}): ordinary Engine API calls behave like the host, while host network, privileged, a docker.sock bind and exec into a host-net container are denied by design (403). Never bypass the proxy. virsh, apt and host systemctl need the host profile.`;
 }
 
 // Caveman defaults for a NEW session. `PI_DEVOPS_CAVEMAN=off|lite|full|ultra`
@@ -143,7 +156,15 @@ function normalizeCavemanScope(value: unknown): CavemanScope | undefined {
 // value in PI_DEVOPS_NET_MODE; the on-disk mode file is only the preference for
 // the *next* launch (the panel can rewrite it while this process keeps its
 // netns), so it is used as a fallback only.
-let sessionNetMode: "awg" | "direct" | undefined;
+let sessionNetwork: SessionNetwork = { ...HOST_NETWORK };
+let networkPinned = false;
+
+function pinSessionNetwork(): SessionNetwork {
+  if (networkPinned) return sessionNetwork;
+  networkPinned = true;
+  sessionNetwork = pinFromLocal(sessionLocal());
+  return sessionNetwork;
+}
 
 // Session-level phrase triggers for the caveman output style (the `/caveman`
 // command is the explicit surface; these only react to a user message). Rules,
@@ -353,7 +374,7 @@ Hard rules:
 - Trust the \`# Current DevOps mode\` block: it is injected on every run. Never ask the user to switch modes and never claim the session is in ASK/BUILD — the extension performs the switch and states the current mode in that block.
 - Planning artifacts may be written only under \`${root}/.devops/plans/**\` or \`${root}/.devops/drafts/**\`. Never write project or infra files.
 - Read-only MCP only: \`knowledge\` (find/glob/grep/health/list/read/search/tree), \`memory\` (recall/search_tools).
-- If the task needs docker or virsh and the network mode is \`awg\`, say so; do not bypass isolation. The network-mode block below says whether a filtered docker proxy is configured.
+- If the task needs docker or virsh and the network profile is a namespace, say so; do not bypass isolation. The network-profile block below says whether a filtered docker proxy is configured.
 - Do not propose BUILD merely because an action would require a write. First finish the plan.
 
 Planning workflow:
@@ -390,7 +411,7 @@ Hard rules (identical to PLAN):
 - ASK is strictly read-only research: file writes are disabled completely. Do not call \`write\`/\`edit\` (they are not available) and do not write to \`.devops/plans|drafts/**\` (those are PLAN-only) or any other path.
 - Read \`INDEX.md\` under the infra root and the relevant subsystem \`index.md\` first; treat them as the source of truth.
 - Read-only MCP only: \`knowledge\` (find/glob/grep/health/list/read/search/tree), \`memory\` (recall/search_tools).
-- If an answer requires docker or virsh and the network mode is \`awg\`, say so; do not bypass isolation.
+- If an answer requires docker or virsh and the network profile is a namespace, say so; do not bypass isolation.
 - Never print or copy secrets; refer to variable names and paths only.
 
 Answering workflow:
@@ -416,7 +437,7 @@ Implementation is allowed.
 - Update \`INDEX.md\` and the subsystem \`index.md\` in the same change as any topology, port, service, or script change.
 ${dashRule}
 - Never print or copy secrets; refer to variable names and paths only.
-- Network: obey the network-mode block. In \`awg\`, do not bypass a filtered docker proxy; \`virsh\`, \`apt\` and host \`systemctl\` need the direct profile mode when the block says so.
+- Network: obey the network-profile block. Inside a namespace, do not bypass a filtered docker proxy; \`virsh\`, \`apt\` and host \`systemctl\` need the host profile when the block says so.
 - Approval mode (\`/approve off|safe|strict\`, footer \`approve:\`) may pause a dangerous action (\`safe\`) or every tool call (\`strict\`). Do not retry a denied call in a loop.
 - Post-task memory gate: every substantial task, including any durable file or configuration change, must run the shared memory policy before the final response. Write the redacted summary to the relevant stores, or save a redacted pending record and report \`Memory: UNCONFIRMED\` / \`UNVERIFIED\`.
 - Finish non-trivial work with fresh verification output (health checks, \`docker ps\`, curls). If verification is impossible, report UNVERIFIED explicitly.`;
@@ -554,7 +575,7 @@ export default function devopsModeExtension(pi: ExtensionAPI): void {
       anonLevel: anonLevel(),
       approve: approveLevelName(approveLevel()),
       caveman: cavemanLevel(),
-      net: sessionNetMode ?? resolveNetworkMode(),
+      net: pinSessionNetwork().footerLabel,
     });
     try { setDevopsMode(state.mode); } catch { /* ask | plan | build */ }
   }
@@ -646,8 +667,13 @@ export default function devopsModeExtension(pi: ExtensionAPI): void {
     // `·task` marks the BUILD-only scope (`/caveman auto`).
     label = `${label} · caveman:${cavemanLevel()}${cavemanScope() === "task" ? "·task" : ""}`;
     ctx.ui.setStatus("pi-devops-mode", ctx.ui.theme.fg(color, label));
-    const net = sessionNetMode ?? resolveNetworkMode();
-    ctx.ui.setStatus("pi-devops-net", ctx.ui.theme.fg(net === "awg" ? "success" : "warning", `net:${net}`));
+    const net = pinSessionNetwork();
+    ctx.ui.setStatus(
+      "pi-devops-net",
+      net.footerLabel
+        ? ctx.ui.theme.fg(net.kind === "netns" ? "success" : "warning", `net:${net.footerLabel}`)
+        : undefined,
+    );
     ctx.ui.setStatus(
       "pi-devops-recall",
       state.recallGateRequired ? ctx.ui.theme.fg("warning", "recall:pending") : undefined,
@@ -1048,7 +1074,7 @@ export default function devopsModeExtension(pi: ExtensionAPI): void {
     if (anon > 0) instructions += anonNote(anon);
     if (state.recallGateRequired && !anonBlocksReads(anon)) instructions += SESSION_START_RECALL_NOTE;
     const result: { systemPrompt: string; message?: { customType: string; content: string; display: boolean } } = {
-      systemPrompt: `${event.systemPrompt}\n\n${instructions}${networkNote(local)}`,
+      systemPrompt: `${event.systemPrompt}\n\n${instructions}${networkNote()}`,
     };
     if (changedFrom) {
       result.message = { customType: "pi-devops-mode-change", content: modeChangeNotice(changedFrom, state.mode), display: true };
@@ -1204,7 +1230,7 @@ export default function devopsModeExtension(pi: ExtensionAPI): void {
       state = { ...state, recallGateRequired: false, recallGatePrompted: false };
     }
 
-    sessionNetMode = resolveNetworkMode();
+    pinSessionNetwork();
     publishSharedState();
     if (readOnly()) applyReadOnlyTools(); else applyBuildTools();
     updateStatus(ctx);

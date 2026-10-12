@@ -24,6 +24,16 @@ test('agent panel has one white-style frame, a pi label, and a tab gap', () => {
   for (const line of lines.slice(0, -1)) assert.ok(widthOf(line) <= 39);
 });
 
+test('a plain user message gets the same outline as the agent and stays on the right', () => {
+  const lines = placeBubble(['Привет'], 80, 'right', paints);
+  assert.ok(lines[0].startsWith(' '));
+  assert.match(lines[0], /╭ you /);
+  assert.match(lines.join('\n'), /Привет/);
+  assert.match(lines.at(-2), /╰/);
+  assert.equal(lines.filter((line) => line.includes('╭')).length, 1);
+  assert.equal(lines.at(-1), '\t');
+});
+
 test('user panel keeps a single frame, shifts right, and does not gain a second border', () => {
   const boxed = ['╭ user ────────╮', '│ привет       │', '╰──────────────╯'];
   const lines = placeBubble(boxed, 80, 'right', paints);

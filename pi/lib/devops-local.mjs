@@ -7,6 +7,18 @@ import path from 'node:path';
 
 export const LOCAL_MAP_FILE = 'devops-local.json';
 
+export const HOST_PROFILE = Object.freeze({
+  id: 'host',
+  label: 'host',
+  kind: 'host',
+  container: '',
+  namespace: '',
+  launcher: '',
+  envName: 'direct',
+  proxy: '',
+  proxyAllow: '',
+});
+
 export function expandHome(value, home = os.homedir()) {
   if (typeof value !== 'string') return value;
   if (value === '~') return home;
@@ -56,6 +68,76 @@ function isPathLike(value) {
   return typeof value === 'string' && /^(~[\\/]|\/|\.{1,2}[\\/]|[A-Za-z]:[\\/])/.test(value);
 }
 
+function asText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function pathIfNeeded(value) {
+  const text = asText(value);
+  if (!text) return '';
+  return isPathLike(text) ? path.resolve(expandHome(text)) : text;
+}
+
+/** Named netns profiles from the map. Host is implicit and is not listed. */
+export function networkProfiles(map) {
+  const network = map?.network && typeof map.network === 'object' ? map.network : {};
+  const raw = Array.isArray(network.profiles) ? network.profiles : [];
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const id = asText(item.id);
+    if (!id || id === 'host' || id === 'direct' || seen.has(id)) continue;
+    if (item.kind === 'host') continue;
+    seen.add(id);
+    out.push({
+      id,
+      label: asText(item.label) || id,
+      kind: 'netns',
+      container: asText(item.container),
+      namespace: asText(item.namespace),
+      launcher: pathIfNeeded(item.launcher),
+      envName: asText(item.envName) || id,
+      proxy: pathIfNeeded(item.proxy),
+      proxyAllow: pathIfNeeded(item.proxyAllow),
+    });
+  }
+  return out;
+}
+
+export function readStoredNetworkId(netModeFile) {
+  try {
+    return fs.readFileSync(netModeFile, 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Active profile for this process. Env wins, then the mode file, then
+ * `network.default`. An unknown id is host, never a built-in tunnel name.
+ */
+export function resolveActiveNetwork(map, { env = process.env, stored = '' } = {}) {
+  const profiles = networkProfiles(map);
+  const byId = new Map(profiles.map((profile) => [profile.id, profile]));
+  const fromEnv = asText(env.PI_DEVOPS_NET_MODE);
+  const preferred = asText(map?.network?.default);
+  const candidates = [fromEnv, asText(stored), preferred].filter(Boolean);
+  for (const id of candidates) {
+    if (id === 'host' || id === 'direct') return { profile: { ...HOST_PROFILE }, unknown: false };
+    const hit = byId.get(id);
+    if (hit) return { profile: hit, unknown: false };
+    return { profile: { ...HOST_PROFILE }, unknown: true };
+  }
+  return { profile: { ...HOST_PROFILE }, unknown: false };
+}
+
+/** Footer text. Empty when the map declares no netns profile. */
+export function networkFooterLabel(map, profile) {
+  if (!networkProfiles(map).length) return '';
+  return asText(profile?.label) || 'host';
+}
+
 function configHome(env) {
   const xdg = String(env.XDG_CONFIG_HOME ?? '').trim();
   return xdg ? path.resolve(xdg) : path.join(os.homedir(), '.config');
@@ -75,6 +157,9 @@ export function resolveLocal(env = process.env, cwd = process.cwd()) {
   const legacyPendingRoots = Array.isArray(map.legacyPendingRoots)
     ? map.legacyPendingRoots.filter((x) => typeof x === 'string' && x.trim()).map((x) => path.resolve(expandHome(x)))
     : [];
+  const stored = readStoredNetworkId(netModeFile);
+  const active = resolveActiveNetwork(map, { env, stored });
+  const profiles = networkProfiles(map);
   return {
     mapFile: file,
     mapMissing: Boolean(missing),
@@ -99,6 +184,12 @@ export function resolveLocal(env = process.env, cwd = process.cwd()) {
       skill: typeof dashboard.skill === 'string' ? dashboard.skill : 'monitoring',
     },
     lab: Object.fromEntries(Object.entries(lab).map(([k, v]) => [k, isPathLike(v) ? path.resolve(expandHome(v)) : v])),
+    network: {
+      profiles,
+      active: active.profile,
+      unknown: active.unknown,
+      footerLabel: networkFooterLabel(map, active.profile),
+    },
   };
 }
 

@@ -98,29 +98,34 @@ function piVersion() {
   return String(r.stdout || '').trim() || '?';
 }
 
-function currentMode() {
-  try {
-    const value = fs.readFileSync(local.netModeFile, 'utf8').trim();
-    return value === 'direct' ? 'direct' : 'awg';
-  } catch {
-    return 'awg';
-  }
+function freshNetwork() {
+  return resolveLocal({ ...process.env, PI_CODING_AGENT_DIR: profileDir, PI_DEVOPS_NET_MODE: '' }, repoRoot).network;
 }
 
-function setMode(mode) {
-  if (mode !== 'awg' && mode !== 'direct') {
-    output.write(`${RED}Режим: awg или direct${RESET}\n`);
+function currentMode() {
+  const network = freshNetwork();
+  return network?.active?.label || 'host';
+}
+
+function setMode(id) {
+  const network = freshNetwork();
+  const profiles = Array.isArray(network?.profiles) ? network.profiles : [];
+  const known = id === 'host' || id === 'direct' || profiles.some((profile) => profile.id === id);
+  if (!known) {
+    output.write(`${RED}Неизвестный профиль сети: ${id}${RESET}\n`);
     return;
   }
+  const stored = id === 'direct' ? 'host' : id;
   fs.mkdirSync(path.dirname(local.netModeFile), { recursive: true });
-  fs.writeFileSync(local.netModeFile, `${mode}\n`, { mode: 0o600 });
+  fs.writeFileSync(local.netModeFile, `${stored}\n`, { mode: 0o600 });
   const helper = local.lab?.routeraiHelper;
   const snapshot = local.lab?.modelSnapshot;
+  const chosen = profiles.find((profile) => profile.id === stored);
   if (typeof helper === 'string' && fs.existsSync(helper) && snapshot) {
-    const action = mode === 'direct' ? 'apply-direct' : 'restore';
+    const action = chosen?.kind === 'netns' ? 'restore' : 'apply-direct';
     spawnSync(process.execPath, [helper, 'pi-model', action, settingsJson, snapshot], { stdio: 'inherit' });
   }
-  output.write(`${GREEN}Режим сети для следующего запуска: ${mode}${RESET}\n`);
+  output.write(`${GREEN}Профиль сети для следующего запуска: ${chosen?.label || 'host'}${RESET}\n`);
 }
 
 function ensureBackupDir() {
@@ -176,7 +181,7 @@ async function confirmPhrase(rl, phrase, prompt) {
 async function statusScreen(rl) {
   console.clear();
   const sessions = listSessionFiles(sessionDir);
-  const net = hasLabLauncher(local) ? currentMode() : '—';
+  const net = currentMode();
   printBox([
     boxTop(),
     boxCenter('Pi DevOps Agent — статус'),
@@ -252,22 +257,29 @@ async function diagnosticsScreen(rl) {
 
 async function networkMenu(rl) {
   while (true) {
+    const profiles = freshNetwork()?.profiles || [];
+    const choices = [{ id: 'host', label: 'host' }, ...profiles.map((profile) => ({ id: profile.id, label: profile.label }))];
     console.clear();
     printBox([
       boxTop(),
-      boxCenter('Сетевой режим'),
+      boxCenter('Сеть'),
       boxSep(),
       boxLine(` Сейчас для следующего запуска: ${currentMode()}`),
       boxDash(),
-      boxLine(' [1] awg — изоляция, kill switch'),
-      boxLine(' [2] direct — сеть хоста'),
+      ...choices.map((profile, index) => boxLine(` [${index + 1}] ${profile.label}`)),
       boxLine(' [0] Назад'),
       boxBottom(),
     ]);
     const choice = await rl.question(`\n${BOLD}Выбор:${RESET} `);
-    if (choice === '1') { setMode('awg'); await pause(rl); }
-    else if (choice === '2') { setMode('direct'); await pause(rl); }
-    else if (choice === '0' || choice === '') return;
+    if (choice === '0' || choice === '') return;
+    const picked = choices[Number(choice) - 1];
+    if (!picked) {
+      output.write(`${RED}Неверный выбор${RESET}\n`);
+      await pause(rl);
+      continue;
+    }
+    setMode(picked.id);
+    await pause(rl);
   }
 }
 

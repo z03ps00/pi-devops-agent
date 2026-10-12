@@ -130,7 +130,7 @@ export function authStatus(authPath) {
   }
 }
 
-/** Menu rows. The network row appears only when the local map has a lab launcher. */
+/** Menu rows. The network row appears only when the map lists a netns profile. */
 export function menuEntries(local) {
   const rows = [
     ['1', 'Статус'],
@@ -139,9 +139,9 @@ export function menuEntries(local) {
     ['3', 'Сессии (continue / resume)'],
     ['4', 'Модель и thinking level'],
   ];
-  const launcher = local?.lab?.launcher;
-  if (typeof launcher === 'string' && launcher !== '') {
-    rows.push(['5', 'Сетевой режим (awg / direct)']);
+  const profiles = Array.isArray(local?.network?.profiles) ? local.network.profiles : [];
+  if (profiles.some((profile) => profile && profile.kind === 'netns')) {
+    rows.push(['5', 'Сеть']);
   }
   rows.push(
     ['6', 'Диагностика'],

@@ -82,9 +82,17 @@ function panelRow(line, frame, paints, measure, truncate) {
   return paints.bg(`${paints.border('│')} ${fitted}${gap} ${paints.border('│')}`);
 }
 
-function agentPanel(lines, frame, paints, measure, truncate) {
+function framedPanel(lines, frame, label, paints, measure, truncate) {
   const body = ['', ...lines, ''].map((line) => panelRow(line, frame, paints, measure, truncate));
-  return [panelTop(frame, 'pi', paints, measure, truncate), ...body, panelBottom(frame, paints)];
+  return [panelTop(frame, label, paints, measure, truncate), ...body, panelBottom(frame, paints)];
+}
+
+function agentPanel(lines, frame, paints, measure, truncate) {
+  return framedPanel(lines, frame, 'pi', paints, measure, truncate);
+}
+
+function userPanel(lines, frame, paints, measure, truncate) {
+  return framedPanel(lines, frame, 'you', paints, measure, truncate);
 }
 
 function restyleUserLine(line, frame, paints, measure, truncate) {
@@ -102,11 +110,14 @@ export function placeBubble(lines, terminalWidth, side = 'left', paints, measure
   const body = Array.isArray(lines) ? lines : [];
   if (!body.length) return [];
   const left = ' '.repeat(metrics.pad);
-  const rows = side === 'right' && body.some((line) => plainText(line).includes('╭'))
+  const userHasFrame = side === 'right' && body.some((line) => plainText(line).includes('╭'));
+  const rows = userHasFrame
     ? body.map((line) => restyleUserLine(line, metrics.frame, style, measure, truncate))
-    : side === 'left'
-      ? agentPanel(body, metrics.frame, style, measure, truncate)
-      : body.map((line) => String(line ?? ''));
+    : side === 'right'
+      ? userPanel(body, metrics.frame, style, measure, truncate)
+      : side === 'left'
+        ? agentPanel(body, metrics.frame, style, measure, truncate)
+        : body.map((line) => String(line ?? ''));
   return [...rows.map((line) => `${left}${line}`), MESSAGE_GAP];
 }
 

@@ -1,6 +1,6 @@
 ---
 name: awg-app-isolation
-description: Put an application into the AWG network namespace with a launcher, an inner exec, a kill switch and a host-browser login bridge. Use when isolating a new app or fixing its OAuth callback.
+description: Put an application into a network-namespace profile with a launcher, an inner exec, a kill switch and a host-browser login bridge. Use when isolating a new app or fixing its OAuth callback.
 ---
 
 # Изоляция приложения
@@ -11,7 +11,7 @@ description: Put an application into the AWG network namespace with a launcher, 
 
 Три скрипта рядом со штатными лаунчерами индекса, имена по приложению:
 
-- launch — читает файл режима `awg` или `direct`, при `awg` проверяет, что контейнер контура запущен, и передаёт управление дальше;
+- launch — читает id профиля из файла режима, для туннеля проверяет, что его контейнер запущен, и передаёт управление дальше;
 - net-exec — вход в namespace;
 - net-inner — сброс привилегий и запуск бинаря.
 

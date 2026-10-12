@@ -168,13 +168,13 @@ function aliasOf(map, value) {
   return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : String(value);
 }
 
-const MODE_ALIAS = Object.freeze({ ask: 'Вопрос', plan: 'Планирование', build: 'Реализация' });
-const NET_ALIAS = Object.freeze({ awg: 'AWG', direct: 'напрямую' });
-const SCALE_ALIAS = Object.freeze({ off: 'выкл', on: 'вкл', lite: 'кратко', full: 'сжато', ultra: 'предельно' });
-const LEARN_ALIAS = Object.freeze({ off: 'выкл', safe: 'осторожно', auto: 'само' });
-const THINK_ALIAS = Object.freeze({ off: 'выкл', low: 'низко', medium: 'средне', high: 'высоко' });
-const CAPTURE_ALIAS = Object.freeze({ stack: 'стек', chat: 'чат', off: 'выкл', on: 'вкл' });
-const APPROVE_ALIAS = Object.freeze({ safe: 'осторожно', strict: 'строго' });
+const MODE_ALIAS = Object.freeze({ ask: 'Ask', plan: 'Plan', build: 'Build' });
+const NET_ALIAS = Object.freeze({ awg: 'AWG', direct: 'direct' });
+const SCALE_ALIAS = Object.freeze({ off: 'off', on: 'on', lite: 'lite', full: 'full', ultra: 'ultra' });
+const LEARN_ALIAS = Object.freeze({ off: 'off', safe: 'safe', auto: 'auto' });
+const THINK_ALIAS = Object.freeze({ off: 'off', low: 'low', medium: 'medium', high: 'high' });
+const CAPTURE_ALIAS = Object.freeze({ stack: 'stack', chat: 'chat', off: 'off', on: 'on' });
+const APPROVE_ALIAS = Object.freeze({ safe: 'safe', strict: 'strict' });
 
 function capabilityParts(text) {
   const raw = String(text || '');
@@ -186,39 +186,39 @@ export function composeWorkFooter(snapshot = {}, width = 80) {
   const anon = Math.trunc(Number(snapshot.anonLevel) || 0);
   const approve = String(snapshot.approve || 'off').trim().toLowerCase();
   const primary = [
-    { id: 'mode', text: named('Режим', aliasOf(MODE_ALIAS, mode)), keep: true },
+    { id: 'mode', text: named('Mode', aliasOf(MODE_ALIAS, mode)), keep: true },
   ];
-  if (snapshot.net) primary.push({ id: 'net', text: named('Сеть', aliasOf(NET_ALIAS, snapshot.net)) });
-  if (anon > 0) primary.push({ id: 'anon', text: named('Доступ', `анонимность ${anon}`) });
-  else if (mode === 'plan' || mode === 'ask') primary.push({ id: 'readonly', text: named('Доступ', 'чтение') });
-  else if (APPROVE_ALIAS[approve]) primary.push({ id: 'approve', text: named('Доступ', APPROVE_ALIAS[approve]) });
+  if (snapshot.net) primary.push({ id: 'net', text: named('Net', aliasOf(NET_ALIAS, snapshot.net)) });
+  if (anon > 0) primary.push({ id: 'anon', text: named('Access', `anon ${anon}`) });
+  else if (mode === 'plan' || mode === 'ask') primary.push({ id: 'readonly', text: named('Access', 'read-only') });
+  else if (APPROVE_ALIAS[approve]) primary.push({ id: 'approve', text: named('Access', APPROVE_ALIAS[approve]) });
   primary.push(
-    { id: 'caveman', text: named('Сжатие', aliasOf(SCALE_ALIAS, snapshot.caveman || 'off')) },
-    { id: 'economy', text: named('Экономия', aliasOf(SCALE_ALIAS, snapshot.economy || 'off')) },
-    { id: 'learning', text: named('Обучение', aliasOf(LEARN_ALIAS, snapshot.learning || 'safe')) },
+    { id: 'caveman', text: named('Caveman', aliasOf(SCALE_ALIAS, snapshot.caveman || 'off')) },
+    { id: 'economy', text: named('Economy', aliasOf(SCALE_ALIAS, snapshot.economy || 'off')) },
+    { id: 'learning', text: named('Learning', aliasOf(LEARN_ALIAS, snapshot.learning || 'safe')) },
   );
 
   const secondary = [];
-  if (snapshot.projectName) secondary.push({ id: 'project', text: named('Проект', snapshot.projectName) });
+  if (snapshot.projectName) secondary.push({ id: 'project', text: named('Project', snapshot.projectName) });
   secondary.push(...capabilityParts(snapshot.capabilityFooter));
   const pct = roundPct(snapshot.contextPercent);
   if (pct != null) {
-    secondary.push({ id: 'ctx', text: `${named('Контекст', `${pct}%`)} ${contextBar(pct)}`, keep: true });
+    secondary.push({ id: 'ctx', text: `${named('Context', `${pct}%`)} ${contextBar(pct)}`, keep: true });
   }
-  if (snapshot.model) secondary.push({ id: 'model', text: named('Модель', shortModel(snapshot.model)) });
-  secondary.push({ id: 'mcp', text: `MCP Сервера ${nonNegInt(snapshot.mcpConnected, 0)}/${nonNegInt(snapshot.mcpEnabled, snapshot.mcpConnected)}` });
-  secondary.push({ id: 'thinking', text: named('Мышление', aliasOf(THINK_ALIAS, snapshot.thinkingLevel || 'off')) });
+  if (snapshot.model) secondary.push({ id: 'model', text: named('Model', shortModel(snapshot.model)) });
+  secondary.push({ id: 'mcp', text: `MCP servers ${nonNegInt(snapshot.mcpConnected, 0)}/${nonNegInt(snapshot.mcpEnabled, snapshot.mcpConnected)}` });
+  secondary.push({ id: 'thinking', text: named('Think', aliasOf(THINK_ALIAS, snapshot.thinkingLevel || 'off')) });
   const rotateOn = snapshot.rotateEnabled === true;
   const rotatePct = roundPct(snapshot.rotateThreshold);
   secondary.push({
     id: 'rotate',
-    text: named('Ротация', `${rotateOn ? 'вкл' : 'выкл'} ${rotatePct == null ? '85%' : `${rotatePct}%`}`),
+    text: named('Rotate', `${rotateOn ? 'on' : 'off'} ${rotatePct == null ? '85%' : `${rotatePct}%`}`),
   });
   if (snapshot.captureEnabled) {
-    const cap = snapshot.captureMode ? aliasOf(CAPTURE_ALIAS, snapshot.captureMode) : 'вкл';
-    secondary.push({ id: 'capture', text: named('Захват', cap) });
+    const cap = snapshot.captureMode ? aliasOf(CAPTURE_ALIAS, snapshot.captureMode) : 'on';
+    secondary.push({ id: 'capture', text: named('Capture', cap) });
   }
-  if (snapshot.gitBranch) secondary.push({ id: 'git', text: named('Ветка', `${snapshot.gitBranch}${snapshot.gitDirty ? '*' : ''}`) });
+  if (snapshot.gitBranch) secondary.push({ id: 'git', text: named('Branch', `${snapshot.gitBranch}${snapshot.gitDirty ? '*' : ''}`) });
 
   const dropSecondary = ['capture', 'rotate', 'git', 'thinking', 'mcp', 'model', 'project', 'caps'];
   const dropPrimary = ['learning', 'economy', 'caveman', 'net', 'approve', 'readonly', 'anon'];
@@ -241,11 +241,11 @@ export function composeWorkFooter(snapshot = {}, width = 80) {
     primaryParts: primary,
     secondaryParts: secondary,
     lines: [
-      { kind: 'title', text: 'Сессия' },
+      { kind: 'title', text: 'Session' },
       { kind: 'rule', text: rule },
       { kind: 'primary', text: primaryFit.text, parts: primaryFit.parts },
       { kind: 'gap', text: groupGap },
-      { kind: 'title', text: 'Среда' },
+      { kind: 'title', text: 'Environment' },
       { kind: 'rule', text: rule },
       { kind: 'secondary', text: secondaryFit.text, parts: secondaryFit.parts },
     ],

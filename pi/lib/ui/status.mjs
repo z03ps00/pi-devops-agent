@@ -15,7 +15,7 @@ export function composeStatus(snapshot = {}) {
     '',
     'Infrastructure',
     `  ${snapshot.infraRoot || '(not set)'}`,
-    `  Network ${snapshot.net || '—'}`,
+    `  Network ${snapshot.net || 'host'}`,
     `  Git ${git}`,
     '',
     'Agent',
