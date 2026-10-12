@@ -1,0 +1,19 @@
+id: docs-maintenance
+version: 0.1.0
+description: docs-maintenance
+status: active
+triggers:
+  - index.md
+  - handoff
+  - документац
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

@@ -1,0 +1,19 @@
+id: agent-memory-infra
+version: 0.1.0
+description: agent-memory-infra
+status: active
+triggers:
+  - cognee
+  - openviking
+  - memory backup
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

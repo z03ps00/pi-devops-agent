@@ -1,0 +1,410 @@
+import { matchesKey, SelectList } from "@earendil-works/pi-tui";
+import {
+  composeApprovalView,
+  filterPaletteActions,
+  PALETTE_ACTIONS,
+  colorize,
+  uiAvailable,
+} from "../../lib/ui/index.mjs";
+import { MODE_CHOICES, MODE_INTRO } from "../../lib/ui/mode-choices.mjs";
+import {
+  ANON_CHOICES,
+  ANON_INTRO,
+  APPROVE_CHOICES,
+  APPROVE_INTRO,
+  CAPTURE_MODEL_CHOICES,
+  CAPTURE_MODEL_INTRO,
+  LEARNING_CHOICES,
+  LEARNING_INTRO,
+  SESSION_ROTATE_CHOICES,
+  SESSION_ROTATE_INTRO,
+  CAVEMAN_CHOICES,
+  CAVEMAN_INTRO,
+  ECONOMY_CHOICES,
+  ECONOMY_INTRO,
+  MCPCONFIG_CHOICES,
+  MCPCONFIG_INTRO,
+} from "../../lib/ui/option-choices.mjs";
+import { composePickerLines, pickerSpanAt } from "../../lib/ui/picker-layout.mjs";
+import { buildCommandSections, filterCommandSections } from "../../lib/ui/command-groups.mjs";
+import { composeFrame, frameMetrics } from "../../lib/ui/overlay-frame.mjs";
+
+function pressed(data: string, kb: any, kind: "up" | "down" | "confirm" | "cancel") {
+  const id = {
+    up: "tui.select.up",
+    down: "tui.select.down",
+    confirm: "tui.select.confirm",
+    cancel: "tui.select.cancel",
+  }[kind];
+  const raw = { up: "up", down: "down", confirm: "enter", cancel: "escape" }[kind];
+  if (typeof kb?.matches === "function") {
+    if (kb.matches(data, id)) return true;
+    if (kind === "confirm" && kb.matches(data, "tui.input.submit")) return true;
+  }
+  if (matchesKey(data, raw)) return true;
+  if (kind === "confirm" && matchesKey(data, "return")) return true;
+  if (kind === "cancel" && matchesKey(data, "ctrl+c")) return true;
+  return false;
+}
+
+function selectTheme(theme: any) {
+  return {
+    selectedPrefix: (t: string) => colorize(theme, "accent", t),
+    selectedText: (t: string) => colorize(theme, "text", t),
+    description: (t: string) => colorize(theme, "dim", t),
+    scrollInfo: (t: string) => colorize(theme, "dim", t),
+    noMatch: (t: string) => colorize(theme, "dim", t),
+  };
+}
+
+function frame(theme: any, title: string, body: string[], width: number, footer = "Enter select    Esc cancel", borderToken = "borderMuted") {
+  const parts = composeFrame({ title, body, width, footer });
+  const bar = (text: string) => colorize(theme, borderToken, text);
+  const paintRow = (line: { kind: string; content: string }) => {
+    const content = line.kind === "footer" ? colorize(theme, "dim", line.content) : line.content;
+    return `${bar("│")}${content}${bar("│")}`;
+  };
+  return [bar(parts.top), ...parts.lines.map(paintRow), bar(parts.bottom)];
+}
+
+type PickerItem = { value: string; label: string; description?: string };
+
+export async function overlaySelect(
+  ctx: any,
+  title: string,
+  items: PickerItem[],
+  intro = "",
+): Promise<string | undefined> {
+  if (!ctx?.ui?.custom) return undefined;
+  return ctx.ui.custom<string | null>((tui: any, theme: any, kb: any, done: (v: string | null) => void) => {
+    let selected = 0;
+    let view = composePickerLines({ intro, items, selectedIndex: selected, width: 60 });
+    const move = (next: number) => {
+      if (!items.length) return;
+      selected = (next + items.length) % items.length;
+      tui.requestRender();
+    };
+    return {
+      invalidate() {},
+      handleInput(data: string) {
+        if (pressed(data, kb, "up")) { move(selected - 1); return; }
+        if (pressed(data, kb, "down")) { move(selected + 1); return; }
+        if (pressed(data, kb, "confirm")) { done(items[selected]?.value ?? null); return; }
+        if (pressed(data, kb, "cancel")) { done(null); }
+      },
+      handleMouse(event: { y: number; type?: string }) {
+        const span = pickerSpanAt(view.spans, event.y - 1);
+        if (!span) return undefined;
+        if (event.type === "press") {
+          selected = span.index;
+          tui.requestRender();
+          return { handled: true, focus: true };
+        }
+        if (event.type === "click") {
+          selected = span.index;
+          done(items[selected]?.value ?? null);
+          return { handled: true };
+        }
+        return undefined;
+      },
+      render(width: number) {
+        const contentWidth = Math.max(20, frameMetrics(width).contentWidth);
+        view = composePickerLines({ intro, items, selectedIndex: selected, width: contentWidth });
+        const body = view.lines.map((line, index) => {
+          const span = pickerSpanAt(view.spans, index);
+          if (span?.index === selected) return colorize(theme, "accent", line);
+          if (!span) return colorize(theme, "dim", line);
+          return line;
+        });
+        return frame(theme, title, body, width);
+      },
+    };
+  }, { overlay: true, overlayOptions: { width: "70%", minWidth: 40, maxHeight: "80%", anchor: "center" } });
+}
+
+/** TUI overlay like /mode; otherwise ctx.ui.select. Cancel returns undefined. */
+export async function pickOverlay(
+  ctx: any,
+  title: string,
+  items: PickerItem[],
+  intro = "",
+): Promise<string | undefined> {
+  if (uiAvailable(ctx)) {
+    const picked = await overlaySelect(ctx, title, items, intro);
+    if (picked) return picked;
+    return undefined;
+  }
+  if (ctx?.hasUI && typeof ctx.ui?.select === "function") {
+    const selected = await ctx.ui.select(title, items.map((i) => i.value));
+    return selected || undefined;
+  }
+  return undefined;
+}
+
+export async function overlayLearningSelect(ctx: any): Promise<string | undefined> {
+  return pickOverlay(ctx, "Learning mode", LEARNING_CHOICES, LEARNING_INTRO);
+}
+
+export async function overlayApproveSelect(ctx: any): Promise<string | undefined> {
+  return pickOverlay(ctx, "Approve", APPROVE_CHOICES, APPROVE_INTRO);
+}
+
+export async function overlayAnonSelect(ctx: any): Promise<string | undefined> {
+  return pickOverlay(ctx, "Anon", ANON_CHOICES, ANON_INTRO);
+}
+
+export async function overlayCaptureModelSelect(ctx: any): Promise<string | undefined> {
+  return pickOverlay(ctx, "Capture model", CAPTURE_MODEL_CHOICES, CAPTURE_MODEL_INTRO);
+}
+
+export async function overlaySessionRotateSelect(ctx: any): Promise<string | undefined> {
+  return pickOverlay(ctx, "Session rotate", SESSION_ROTATE_CHOICES, SESSION_ROTATE_INTRO);
+}
+
+export async function overlayModeSelect(ctx: any): Promise<string | undefined> {
+  return overlaySelect(ctx, "Mode", MODE_CHOICES, MODE_INTRO);
+}
+
+export async function overlayCavemanSelect(ctx: any): Promise<string | undefined> {
+  return pickOverlay(ctx, "Caveman", CAVEMAN_CHOICES, CAVEMAN_INTRO);
+}
+
+export async function overlayEconomySelect(ctx: any): Promise<string | undefined> {
+  return pickOverlay(ctx, "Economy mode", ECONOMY_CHOICES, ECONOMY_INTRO);
+}
+
+export async function overlayMcpConfigSelect(ctx: any): Promise<string | undefined> {
+  return pickOverlay(ctx, "MCP config", MCPCONFIG_CHOICES, MCPCONFIG_INTRO);
+}
+
+export async function overlayApproval(ctx: any, input: { toolName: string; action: string; reason: string }): Promise<string | undefined> {
+  const view = composeApprovalView(input);
+  const items = view.choices.map((c) => ({ value: c.value, label: c.label }));
+  if (!ctx?.ui?.custom) return undefined;
+  return ctx.ui.custom<string | null>((tui: any, theme: any, kb: any, done: (v: string | null) => void) => {
+    const list = new SelectList(items, 6, selectTheme(theme));
+    list.onSelect = (item: { value: string }) => done(item.value);
+    list.onCancel = () => done(null);
+    return {
+      invalidate() { list.invalidate(); },
+      handleInput(data: string) {
+        if (pressed(data, kb, "confirm")) {
+          const item = list.getSelectedItem();
+          if (item?.value) done(item.value);
+          return;
+        }
+        if (pressed(data, kb, "cancel")) { done(null); return; }
+        list.handleInput(data);
+        tui.requestRender();
+      },
+      render(width: number) {
+        const contentWidth = Math.max(20, frameMetrics(width).contentWidth);
+        const body = [
+          "",
+          ...view.fields.flatMap((f) => [colorize(theme, "dim", f.label), f.value, ""]),
+          ...list.render(contentWidth),
+        ];
+        return frame(theme, view.title, body, width, "Enter confirm    Esc deny");
+      },
+    };
+  }, { overlay: true, overlayOptions: { width: "72%", minWidth: 42, maxHeight: "80%", anchor: "center" } });
+}
+
+export async function overlayStatus(ctx: any, text: string): Promise<void> {
+  await ctx.ui.custom<null>((tui: any, theme: any, kb: any, done: (v: null) => void) => ({
+    invalidate() {},
+    handleInput(data: string) {
+      if (pressed(data, kb, "confirm") || pressed(data, kb, "cancel")) done(null);
+    },
+    render(width: number) {
+      return frame(theme, "PI DevOps Agent", text.split("\n"), width, "Esc close");
+    },
+  }), { overlay: true, overlayOptions: { width: "70%", minWidth: 40, maxHeight: "85%", anchor: "center" } });
+}
+
+export async function overlayPalette(ctx: any): Promise<string | undefined> {
+  return ctx.ui.custom<string | null>((tui: any, theme: any, kb: any, done: (v: string | null) => void) => {
+    let query = "";
+    let list = new SelectList(PALETTE_ACTIONS.map((a) => ({ value: a.id, label: a.label, description: a.command })), 12, selectTheme(theme));
+    const rebuild = () => {
+      const items = filterPaletteActions(query).map((a) => ({ value: a.id, label: a.label, description: a.command }));
+      list = new SelectList(items.length ? items : [{ value: "", label: "No matches", description: "" }], 12, selectTheme(theme));
+      list.onSelect = (item: { value: string }) => { if (item.value) done(item.value); };
+      list.onCancel = () => done(null);
+    };
+    rebuild();
+    return {
+      invalidate() { list.invalidate(); },
+      handleInput(data: string) {
+        if (pressed(data, kb, "cancel")) { done(null); return; }
+        if (pressed(data, kb, "confirm")) {
+          const item = list.getSelectedItem();
+          if (item?.value) done(item.value);
+          return;
+        }
+        if (matchesKey(data, "backspace")) { query = query.slice(0, -1); rebuild(); tui.requestRender(); return; }
+        if (data.length === 1 && data >= " " && data !== "\x7f") { query += data; rebuild(); tui.requestRender(); return; }
+        list.handleInput(data);
+        tui.requestRender();
+      },
+      render(width: number) {
+        const contentWidth = Math.max(20, frameMetrics(width).contentWidth);
+        const body = [`> ${query}`, "", ...list.render(contentWidth)];
+        return frame(theme, "PI DevOps", body, width, "Type to filter    Enter run    Esc close");
+      },
+    };
+  }, { overlay: true, overlayOptions: { width: "56%", minWidth: 36, maxHeight: "70%", anchor: "center" } });
+}
+
+export async function overlayCommandGroups(ctx: any, commands: any[] = []): Promise<{ name: string; tui: any } | undefined> {
+  const sections = buildCommandSections(commands);
+  if (!ctx?.ui?.custom) {
+    const text = sections.map((section) => `${section.label} ${section.commands.length}`).join("\n");
+    ctx?.ui?.notify?.(text, "info");
+    return undefined;
+  }
+  let hostTui: any = null;
+  const picked = await ctx.ui.custom<string | null>((tui: any, theme: any, kb: any, done: (v: string | null) => void) => {
+    hostTui = tui;
+    let level: "sections" | "commands" = "sections";
+    let sectionIndex = 0;
+    let row = 0;
+    let query = "";
+    const sectionItems = () => sections.map((section) => ({
+      value: section.id,
+      label: section.label,
+      description: String(section.commands.length),
+    }));
+    const commandItems = () => {
+      const section = sections[sectionIndex];
+      return (section?.commands || []).map((command) => ({
+        value: command.name,
+        label: `/${command.name}`,
+        description: command.description || "",
+      }));
+    };
+    const searchItems = () => {
+      const filter = filterCommandSections;
+      const matched = typeof filter === "function"
+        ? filter(sections, query)
+        : sections.flatMap((section) => section.commands || []);
+      const found = matched.map((command: { name: string; description?: string }) => ({
+        value: command.name,
+        label: `/${command.name}`,
+        description: command.description || "",
+      }));
+      return found.length ? found : [{ value: "", label: "Нет совпадений", description: "" }];
+    };
+    const items = () => (query ? searchItems() : (level === "sections" ? sectionItems() : commandItems()));
+    let view = composePickerLines({ intro: "", items: items(), selectedIndex: 0, width: 60 });
+    const move = (next: number) => {
+      const list = items();
+      if (!list.length) return;
+      row = (next + list.length) % list.length;
+      tui.requestRender();
+    };
+    const choose = (index: number) => {
+      const list = items();
+      const picked = list[index];
+      if (!picked?.value) return;
+      if (!query && level === "sections") {
+        sectionIndex = index;
+        level = "commands";
+        row = 0;
+        tui.requestRender();
+        return;
+      }
+      done(picked.value);
+    };
+    return {
+      invalidate() {},
+      handleInput(data: string) {
+        if (pressed(data, kb, "cancel")) {
+          if (query) {
+            query = "";
+            row = level === "commands" ? 0 : sectionIndex;
+            tui.requestRender();
+            return;
+          }
+          if (level === "commands") {
+            level = "sections";
+            row = sectionIndex;
+            tui.requestRender();
+            return;
+          }
+          done(null);
+          return;
+        }
+        if (matchesKey(data, "backspace")) {
+          if (query) {
+            query = query.slice(0, -1);
+            row = 0;
+            tui.requestRender();
+          }
+          return;
+        }
+        if (pressed(data, kb, "up")) { move(row - 1); return; }
+        if (pressed(data, kb, "down")) { move(row + 1); return; }
+        if (pressed(data, kb, "confirm")) {
+          choose(row);
+          return;
+        }
+        if (data.length === 1 && data >= " " && data !== "\x7f") {
+          query += data;
+          row = 0;
+          tui.requestRender();
+        }
+      },
+      handleMouse(event: { y: number; type?: string }) {
+        const span = pickerSpanAt(view.spans, event.y - 1);
+        if (!span) return undefined;
+        if (event.type === "press") {
+          row = span.index;
+          tui.requestRender();
+          return { handled: true, focus: true };
+        }
+        if (event.type === "click") {
+          row = span.index;
+          choose(span.index);
+          return { handled: true };
+        }
+        return undefined;
+      },
+      render(width: number) {
+        const list = items();
+        if (row >= list.length) row = 0;
+        const contentWidth = Math.max(20, frameMetrics(width).contentWidth);
+        const title = query ? "Поиск" : (level === "sections" ? "Разделы" : (sections[sectionIndex]?.label || "Разделы"));
+        const hint = query
+          ? "Ввод — фильтр    Enter — открыть    Esc — сброс"
+          : (level === "sections" ? "Esc — закрыть" : "Esc — назад");
+        view = composePickerLines({ intro: query ? `> ${query}` : "", items: list, selectedIndex: row, width: contentWidth });
+        const body = view.lines.map((line, index) => {
+          const span = pickerSpanAt(view.spans, index);
+          if (span?.index === row) return colorize(theme, "accent", line);
+          if (!span) return colorize(theme, "dim", line);
+          return line;
+        });
+        return frame(theme, title, body, width, hint, "borderAccent");
+      },
+    };
+  }, { overlay: true, overlayOptions: { width: "70%", minWidth: 40, maxHeight: "80%", anchor: "center", margin: 2 } });
+  if (!picked) return undefined;
+  return { name: picked, tui: hostTui };
+}
+
+export async function overlayText(ctx: any, title: string, body: string): Promise<void> {
+  if (!ctx?.ui?.custom) {
+    ctx?.ui?.notify?.(body, "info");
+    return;
+  }
+  await ctx.ui.custom<null>((_tui: any, theme: any, kb: any, done: (v: null) => void) => ({
+    invalidate() {},
+    handleInput(data: string) {
+      if (pressed(data, kb, "confirm") || pressed(data, kb, "cancel")) done(null);
+    },
+    render(width: number) {
+      return frame(theme, title, String(body || "").split("\n"), width, "Esc close");
+    },
+  }), { overlay: true, overlayOptions: { width: "70%", minWidth: 40, maxHeight: "80%", anchor: "center" } });
+}

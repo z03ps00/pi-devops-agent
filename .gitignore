@@ -1,0 +1,27 @@
+# Profile-local data (when the clone is used as PI_CODING_AGENT_DIR)
+auth.json
+trust.json
+settings.json
+mcp.json
+mcp-cache.json
+mcp-onboarding.json
+models.json
+models.db
+models-store.json
+cursor-sdk*.json
+devops-local.json
+lab/
+state/
+sessions/
+sessions-*/
+npm/
+bin/
+skills-installed/
+dist/
+node_modules/
+*.bak
+*.bak.*
+*.tmp
+*.log
+.env
+.env.*

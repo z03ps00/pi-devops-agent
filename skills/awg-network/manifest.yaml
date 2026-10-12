@@ -1,0 +1,20 @@
+id: awg-network
+version: 0.1.0
+description: awg-network
+status: active
+triggers:
+  - amnezia
+  - kill switch
+  - kill-switch
+  - netns
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

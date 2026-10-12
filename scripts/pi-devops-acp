@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# ACP stdio entry. Does not change the default `pi` profile.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-$ROOT}"
+if ! command -v node >/dev/null 2>&1; then
+  echo "node не найден в PATH." >&2
+  exit 1
+fi
+exec node "$ROOT/pi/tools/acp-server.mjs"

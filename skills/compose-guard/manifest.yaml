@@ -1,0 +1,19 @@
+id: compose-guard
+version: 0.1.0
+description: compose-guard
+status: active
+triggers:
+  - docker-compose
+  - compose.yml
+  - compose file
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

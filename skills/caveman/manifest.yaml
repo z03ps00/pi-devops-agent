@@ -1,0 +1,19 @@
+id: caveman
+version: 0.1.0
+description: caveman
+status: active
+triggers:
+  - caveman
+  - коротко
+  - кратко
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

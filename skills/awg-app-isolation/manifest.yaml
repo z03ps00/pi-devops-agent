@@ -1,0 +1,19 @@
+id: awg-app-isolation
+version: 0.1.0
+description: awg-app-isolation
+status: active
+triggers:
+  - изолир
+  - network namespace
+  - oauth callback
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

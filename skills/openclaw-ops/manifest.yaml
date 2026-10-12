@@ -1,0 +1,18 @@
+id: openclaw-ops
+version: 0.1.0
+description: openclaw-ops
+status: active
+triggers:
+  - openclaw
+  - gateway backup
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Pi DevOps Agent
+Comment=Панель управления Pi DevOps Agent
+Exec=bash -lc "clear; exec \"@PI_DEVOPS_CTL@\""
+Terminal=true
+Categories=Development;
+StartupNotify=false

@@ -1,0 +1,37 @@
+{
+  "name": "pi-devops-agent",
+  "version": "0.3.0",
+  "private": true,
+  "description": "PLAN/BUILD/ASK DevOps profile package for Pi: approval, a local path map, a memory queue and a context budget",
+  "pi": {
+    "extensions": [
+      "extensions/devops-mode/index.ts",
+      "extensions/devops-admin/index.ts",
+      "extensions/devops-context/index.ts",
+      "extensions/devops-session-rotate/index.ts",
+      "extensions/devops-memory/index.ts",
+      "extensions/devops-transcript-fold/index.ts",
+      "extensions/devops-ui/index.ts"
+    ],
+    "skills": [
+      "../skills"
+    ],
+    "themes": [
+      "themes"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=1.1.0 <1.2.0",
+    "@earendil-works/pi-ai": ">=1.1.0 <1.2.0",
+    "@earendil-works/pi-agent-core": ">=1.1.0 <1.2.0",
+    "@earendil-works/pi-tui": ">=1.1.0 <1.2.0"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "test": "node tests/run-all.mjs",
+    "typecheck": "node tools/typecheck.mjs",
+    "scan": "node ../scripts/scan-public-tree.mjs"
+  }
+}

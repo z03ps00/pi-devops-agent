@@ -1,0 +1,20 @@
+id: supply-scan
+version: 0.1.0
+description: supply-scan
+status: optional
+triggers:
+  - sbom
+  - cve
+  - dependency scan
+  - trivy
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: candidate

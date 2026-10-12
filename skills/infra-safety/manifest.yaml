@@ -1,0 +1,20 @@
+id: infra-safety
+version: 0.1.0
+description: infra-safety
+status: active
+triggers:
+  - секрет
+  - secret
+  - prompt injection
+  - sops
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

@@ -1,0 +1,14 @@
+agent-memory-infra
+app-icon-generator
+awg-app-isolation
+awg-network
+caveman
+compose-guard
+docs-maintenance
+infra-safety
+linux-host-deps
+mcp-infra
+monitoring
+openclaw-ops
+shared-context-install
+vm-libvirt

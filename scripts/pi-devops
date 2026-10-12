@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Launch Pi with this DevOps profile only. Does not change the default `pi` profile.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-$ROOT}"
+if ! command -v pi >/dev/null 2>&1; then
+  echo "pi не найден в PATH. Нужен Pi Coding Agent 1.1.x." >&2
+  exit 1
+fi
+
+looks_like_dir_arg() {
+  case "$1" in
+    /*|~|~/*|./*|../*) return 0 ;;
+  esac
+  [[ "$1" =~ ^[A-Za-z]:[\\/] ]]
+}
+
+if [ "$#" -ge 1 ]; then
+  target="$1"
+  if [[ "$target" == "~" ]]; then
+    target="$HOME"
+  elif [[ "$target" == ~/* ]]; then
+    target="$HOME/${target#~/}"
+  fi
+  if [ -d "$target" ]; then
+    cd "$target"
+    shift
+  elif looks_like_dir_arg "$1"; then
+    echo "Каталог не найден: $1" >&2
+    exit 1
+  fi
+fi
+
+exec pi "$@"

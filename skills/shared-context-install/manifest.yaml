@@ -1,0 +1,18 @@
+id: shared-context-install
+version: 0.1.0
+description: shared-context-install
+status: active
+triggers:
+  - shared context
+  - global-memory-rule
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

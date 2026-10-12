@@ -1,0 +1,19 @@
+id: monitoring
+version: 0.1.0
+description: monitoring
+status: active
+triggers:
+  - zabbix
+  - conky
+  - dashboard
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

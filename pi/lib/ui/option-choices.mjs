@@ -1,0 +1,64 @@
+export const APPROVE_INTRO = 'Когда спрашивать подтверждение в BUILD. Новая сессия начинается с «не спрашивать».';
+
+export const APPROVE_CHOICES = [
+  { value: 'off', label: 'off', description: 'не спрашивать.' },
+  { value: 'safe', label: 'safe', description: 'спрашивать перед опасным действием: запись файлов, разрушительная команда, изменение инфраструктуры или MCP.' },
+  { value: 'strict', label: 'strict', description: 'спрашивать перед каждым вызовом инструмента.' },
+];
+
+export const ANON_INTRO = 'Насколько эта сессия отрезана от памяти. Новая сессия начинается с обычной политики.';
+
+export const ANON_CHOICES = [
+  { value: 'off', label: 'off', description: 'память читается и пишется как обычно.' },
+  { value: '1', label: '1', description: 'не писать в общую память и не оставлять очередь на запись.' },
+  { value: '2', label: '2', description: 'не читать и не писать общую память.' },
+  { value: '3', label: '3', description: 'не читать, не писать и не оставлять локальные handoff-следы.' },
+];
+
+export const CAPTURE_MODEL_INTRO = 'Чем сжимать диалог перед записью в память.';
+
+export const CAPTURE_MODEL_CHOICES = [
+  { value: 'off', label: 'off', description: 'без модели, только простые правила.' },
+  { value: 'stack', label: 'stack', description: 'модель стека Cognee и OpenViking.' },
+  { value: 'chat', label: 'chat', description: 'текущая модель этого чата.' },
+  { value: 'ollama', label: 'ollama', description: 'локальная модель. Дальше спросит имя.' },
+  { value: 'routerai', label: 'routerai', description: 'модель Router AI. Дальше спросит имя.' },
+];
+
+export const LEARNING_INTRO = 'Пишет ли агент локальные skills из повторяющейся работы. Новая сессия берёт сохранённый режим. По умолчанию safe.';
+
+export const LEARNING_CHOICES = [
+  { value: 'off', label: 'off', description: 'не создавать skills, rules и черновики из опыта.' },
+  { value: 'safe', label: 'safe', description: 'собрать skill и ждать /evolve approve.' },
+  { value: 'auto', label: 'auto', description: 'включить procedure-skill без опасных инструментов после проверки.' },
+];
+
+export const SESSION_ROTATE_INTRO = 'Новая сессия вместо сжатия контекста. Порог процента задаётся отдельно: /session-rotate 80.';
+
+export const SESSION_ROTATE_CHOICES = [
+  { value: 'on', label: 'on', description: 'при заполнении контекста начать новую сессию.' },
+  { value: 'off', label: 'off', description: 'не ротировать, контекст сжимается как обычно.' },
+];
+
+export const MCPCONFIG_INTRO = 'Какой mcp.json открыть. После записи нужен /reload.';
+
+export const MCPCONFIG_CHOICES = [
+  { value: 'local', label: 'Локальный', description: '.pi/mcp.json этого проекта. Одно имя перекрывает профиль.' },
+  { value: 'global', label: 'Глобальный', description: 'mcp.json профиля. Общий для всех проектов.' },
+];
+
+export const CAVEMAN_INTRO = 'Насколько коротко отвечать. Факты, команды и предупреждения не сокращаются.';
+
+export const CAVEMAN_CHOICES = [
+  { value: 'off', label: 'off', description: 'обычные ответы.' },
+  { value: 'lite', label: 'lite', description: 'без вступлений и повторов.' },
+  { value: 'full', label: 'full', description: 'короткие фразы, только суть.' },
+  { value: 'ultra', label: 'ultra', description: 'минимум слов, списки и команды.' },
+];
+
+export const ECONOMY_INTRO = 'Экономия контекста: меньше системных вставок и короче напоминания.';
+
+export const ECONOMY_CHOICES = [
+  { value: 'off', label: 'off', description: 'полное ядро и напоминания.' },
+  { value: 'on', label: 'on', description: 'только ядро режима и короткая сводка навыков.' },
+];

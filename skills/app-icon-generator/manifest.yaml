@@ -1,0 +1,19 @@
+id: app-icon-generator
+version: 0.1.0
+description: app-icon-generator
+status: active
+triggers:
+  - .desktop
+  - launcher icon
+  - ярлык
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

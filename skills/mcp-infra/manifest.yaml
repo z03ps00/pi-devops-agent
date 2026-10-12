@@ -1,0 +1,19 @@
+id: mcp-infra
+version: 0.1.0
+description: mcp-infra
+status: active
+triggers:
+  - mcp server
+  - compose project
+  - INDEX.md
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified

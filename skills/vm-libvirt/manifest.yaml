@@ -1,0 +1,19 @@
+id: vm-libvirt
+version: 0.1.0
+description: vm-libvirt
+status: active
+triggers:
+  - virsh
+  - libvirt
+  - snapshot
+requires:
+  any: []
+optional: []
+modes:
+  - ask
+  - plan
+  - build
+cost:
+  context: low
+quality:
+  level: verified
