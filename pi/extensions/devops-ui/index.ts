@@ -5,7 +5,6 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Key, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { alignChatTree } from "../../lib/ui/message-align.mjs";
 import { readGitMark } from "../../lib/ui/git-mark.mjs";
-import { formatCapabilityFooter, snapshotCapabilities } from "../../lib/harness/capabilities.mjs";
 import { readLearningMode } from "../../lib/harness/learning.mjs";
 import { contextPercent } from "../../lib/harness/budget.mjs";
 import { getSession } from "../../lib/harness/session.mjs";
@@ -74,7 +73,6 @@ function collectSnapshot(ctx: any, footerData?: any, pi?: ExtensionAPI) {
     captureEnabled: capture.idleEnabled === true && capture.host === "pi",
     captureMode: capture.distillerMode,
     contextPercent: harnessPct ?? usage?.percent ?? null,
-    capabilityFooter: session.tools.length ? formatCapabilityFooter(snapshotCapabilities(session.tools)) : "",
     gitBranch: git.branch || footerData?.getGitBranch?.() || "",
     gitDirty: git.dirty === true,
     projectName: path.basename(local.infraRoot),

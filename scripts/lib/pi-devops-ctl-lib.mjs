@@ -130,7 +130,7 @@ export function authStatus(authPath) {
   }
 }
 
-/** Menu rows. The network row appears only when the map lists a netns profile. */
+/** Menu rows. Network setup is always available, even before the first profile. */
 export function menuEntries(local) {
   const rows = [
     ['1', 'Статус'],
@@ -139,10 +139,7 @@ export function menuEntries(local) {
     ['3', 'Сессии (continue / resume)'],
     ['4', 'Модель и thinking level'],
   ];
-  const profiles = Array.isArray(local?.network?.profiles) ? local.network.profiles : [];
-  if (profiles.some((profile) => profile && profile.kind === 'netns')) {
-    rows.push(['5', 'Сеть']);
-  }
+  rows.push(['5', 'Сеть']);
   rows.push(
     ['6', 'Диагностика'],
     ['7', 'Backup / Restore settings.json'],

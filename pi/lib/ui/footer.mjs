@@ -100,8 +100,6 @@ export function footerSegments(snapshot = {}) {
 
   if (snapshot.projectName) segs.push({ id: 'project', text: String(snapshot.projectName) });
 
-  if (snapshot.capabilityFooter) segs.push({ id: 'caps', text: String(snapshot.capabilityFooter) });
-
   const pct = roundPct(snapshot.contextPercent);
   if (pct != null) {
     segs.push({ id: 'ctx', text: `ctx ${pct}%` });
@@ -131,7 +129,7 @@ export function footerSegments(snapshot = {}) {
 
 /** Drop order for a narrow terminal (lowest priority first). Mode is never dropped. */
 export const FOOTER_DROP_ORDER = Object.freeze([
-  'bar', 'caps', 'project', 'capture', 'memory', 'plan', 'git', 'model', 'caveman', 'mcp', 'thinking', 'rotate', 'ctx', 'learning', 'approve', 'readonly', 'net', 'anon',
+  'bar', 'project', 'capture', 'memory', 'plan', 'git', 'model', 'caveman', 'mcp', 'thinking', 'rotate', 'ctx', 'learning', 'approve', 'readonly', 'net', 'anon',
 ]);
 
 export function composeFooter(snapshot = {}, width = 80) {
@@ -176,11 +174,6 @@ const THINK_ALIAS = Object.freeze({ off: 'off', low: 'low', medium: 'medium', hi
 const CAPTURE_ALIAS = Object.freeze({ stack: 'stack', chat: 'chat', off: 'off', on: 'on' });
 const APPROVE_ALIAS = Object.freeze({ safe: 'safe', strict: 'strict' });
 
-function capabilityParts(text) {
-  const raw = String(text || '');
-  return raw ? [{ id: 'caps', text: raw }] : [];
-}
-
 export function composeWorkFooter(snapshot = {}, width = 80) {
   const mode = String(snapshot.mode || 'ask').trim().toLowerCase();
   const anon = Math.trunc(Number(snapshot.anonLevel) || 0);
@@ -200,7 +193,6 @@ export function composeWorkFooter(snapshot = {}, width = 80) {
 
   const secondary = [];
   if (snapshot.projectName) secondary.push({ id: 'project', text: named('Project', snapshot.projectName) });
-  secondary.push(...capabilityParts(snapshot.capabilityFooter));
   const pct = roundPct(snapshot.contextPercent);
   if (pct != null) {
     secondary.push({ id: 'ctx', text: `${named('Context', `${pct}%`)} ${contextBar(pct)}`, keep: true });
@@ -220,7 +212,7 @@ export function composeWorkFooter(snapshot = {}, width = 80) {
   }
   if (snapshot.gitBranch) secondary.push({ id: 'git', text: named('Branch', `${snapshot.gitBranch}${snapshot.gitDirty ? '*' : ''}`) });
 
-  const dropSecondary = ['capture', 'rotate', 'git', 'thinking', 'mcp', 'model', 'project', 'caps'];
+  const dropSecondary = ['capture', 'rotate', 'git', 'thinking', 'mcp', 'model', 'project'];
   const dropPrimary = ['learning', 'economy', 'caveman', 'net', 'approve', 'readonly', 'anon'];
   const fit = (items, order) => {
     const kept = [...items];
@@ -274,6 +266,7 @@ export function segmentAt(line, parts, column) {
 
 export const FOOTER_SEGMENT_ACTIONS = Object.freeze({
   mode: 'command:mode',
+  net: 'command:net',
   learning: 'command:learning',
   anon: 'command:anon',
   approve: 'command:approve',

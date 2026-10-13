@@ -212,3 +212,124 @@ export function readLabOverlay(local) {
 export function missingKeyHint(key, local) {
   return `devops-local.json has no '${key}': set it in ${local?.mapFile ?? LOCAL_MAP_FILE}`;
 }
+
+export function profileIdFromLabel(label) {
+  return String(label || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32);
+}
+
+export function renderLaunchScript(template, fields) {
+  const replacements = {
+    '<PROFILE_ID>': fields.profileId,
+    '<CONTAINER>': fields.container,
+    '<APP_BIN>': fields.appBin || 'pi',
+    '<NET_EXEC>': fields.netExec || '',
+    '<CLIENT_ENV>': fields.clientEnv || '',
+    '<MODE_FILE>': fields.modeFile,
+    '<app>': 'devops',
+  };
+  return Object.entries(replacements).reduce(
+    (text, [token, value]) => text.split(token).join(value),
+    String(template),
+  );
+}
+
+function writeLocalMapFile(file, map) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(map, null, 2)}\n`);
+  try { fs.chmodSync(tmp, 0o600); } catch { /* windows */ }
+  fs.renameSync(tmp, file);
+}
+
+export function generatedLauncherPath(env, id) {
+  return path.join(profileDir(env), 'network', `${id}-launch.sh`);
+}
+
+export function selectNetworkProfile(env, id) {
+  const stored = asText(id) === 'direct' ? 'host' : asText(id);
+  const local = resolveLocal(env);
+  const known = stored === 'host' || local.network.profiles.some((profile) => profile.id === stored);
+  if (!stored || !known) return { ok: false, reason: 'unknown' };
+  fs.mkdirSync(path.dirname(local.netModeFile), { recursive: true });
+  fs.writeFileSync(local.netModeFile, `${stored}\n`, { mode: 0o600 });
+  const chosen = local.network.profiles.find((profile) => profile.id === stored);
+  return { ok: true, id: stored, label: chosen?.label || 'host', kind: chosen?.kind || 'host' };
+}
+
+export function addNetworkProfile(env, fields, template) {
+  const label = asText(fields?.label);
+  const id = asText(fields?.id) || profileIdFromLabel(label);
+  if (!/^[a-z][a-z0-9-]{0,31}$/.test(id) || id === 'host' || id === 'direct') {
+    return { ok: false, reason: 'bad-id' };
+  }
+  const container = asText(fields?.container);
+  if (!container) return { ok: false, reason: 'container' };
+  const loaded = readLocalMap(env);
+  if (loaded.error) return { ok: false, reason: loaded.error };
+  const map = loaded.map;
+  const network = map.network && typeof map.network === 'object' && !Array.isArray(map.network)
+    ? { ...map.network }
+    : {};
+  const profiles = Array.isArray(network.profiles) ? [...network.profiles] : [];
+  if (profiles.some((profile) => asText(profile?.id) === id)) return { ok: false, reason: 'exists' };
+  const netExec = asText(fields?.netExec) || asText(network.netExec);
+  if (!netExec) return { ok: false, reason: 'need-net-exec' };
+  if (!template) return { ok: false, reason: 'template' };
+  const local = resolveLocal(env);
+  const launcher = generatedLauncherPath(env, id);
+  const script = renderLaunchScript(template, {
+    profileId: id,
+    container,
+    appBin: local.piBin || 'pi',
+    netExec,
+    clientEnv: asText(fields?.clientEnv) || asText(network.clientEnv),
+    modeFile: local.netModeFile,
+  });
+  fs.mkdirSync(path.dirname(launcher), { recursive: true });
+  fs.writeFileSync(launcher, script, { mode: 0o755 });
+  profiles.push({
+    id,
+    label: label || id,
+    kind: 'netns',
+    container,
+    launcher,
+    envName: id,
+  });
+  network.profiles = profiles;
+  network.netExec = netExec;
+  map.network = network;
+  if (!map.schema) map.schema = 1;
+  writeLocalMapFile(loaded.file, map);
+  return { ok: true, id, label: label || id, launcher };
+}
+
+export function removeNetworkProfile(env, id) {
+  const stored = asText(id);
+  if (!stored || stored === 'host' || stored === 'direct') return { ok: false, reason: 'host' };
+  const loaded = readLocalMap(env);
+  if (loaded.error) return { ok: false, reason: loaded.error };
+  const map = loaded.map;
+  const network = map.network && typeof map.network === 'object' && !Array.isArray(map.network)
+    ? { ...map.network }
+    : {};
+  const profiles = Array.isArray(network.profiles) ? network.profiles : [];
+  const hit = profiles.find((profile) => asText(profile?.id) === stored);
+  if (!hit) return { ok: false, reason: 'missing' };
+  const generated = generatedLauncherPath(env, stored);
+  const launcher = asText(hit.launcher);
+  if (launcher && path.resolve(launcher) === path.resolve(generated)) {
+    try { fs.unlinkSync(generated); } catch { /* already gone */ }
+  }
+  network.profiles = profiles.filter((profile) => asText(profile?.id) !== stored);
+  map.network = network;
+  writeLocalMapFile(loaded.file, map);
+  const active = readStoredNetworkId(resolveLocal(env).netModeFile);
+  const modeReset = active === stored;
+  if (modeReset) selectNetworkProfile(env, 'host');
+  return { ok: true, id: stored, modeReset };
+}

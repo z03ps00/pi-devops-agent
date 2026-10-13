@@ -9,13 +9,19 @@ CONTAINER="<CONTAINER>"
 EXEC_SCRIPT="<NET_EXEC>"
 APP_BIN="<APP_BIN>"
 CLIENT_ENV_HELPER="<CLIENT_ENV>"
-MODE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/<app>-vpn"
-MODE_FILE="$MODE_DIR/mode"
+MODE_FILE="<MODE_FILE>"
 
-mkdir -p "$MODE_DIR"
-chmod 700 "$MODE_DIR"
-[ -f "$MODE_FILE" ] || printf 'host\n' > "$MODE_FILE"
+mkdir -p "$(dirname "$MODE_FILE")"
+chmod 700 "$(dirname "$MODE_FILE")"
+[ -f "$MODE_FILE" ] || printf '%s\n' "$PROFILE_ID" > "$MODE_FILE"
 chmod 600 "$MODE_FILE"
+
+apply_env() {
+  if [ -n "${CLIENT_ENV_HELPER:-}" ] && [ -f "$CLIENT_ENV_HELPER" ]; then
+    # shellcheck disable=SC1090
+    . "$CLIENT_ENV_HELPER" "$1"
+  fi
+}
 
 [ -x "$APP_BIN" ] || { echo "<app> не установлен: $APP_BIN" >&2; exit 1; }
 MODE=$(tr -d '[:space:]' < "$MODE_FILE" 2>/dev/null || printf 'host')
@@ -23,7 +29,7 @@ MODE=$(tr -d '[:space:]' < "$MODE_FILE" 2>/dev/null || printf 'host')
 
 case "$MODE" in
   host|direct)
-    . "$CLIENT_ENV_HELPER" direct
+    apply_env direct
     exec "$APP_BIN" "$@"
     ;;
   "$PROFILE_ID")
@@ -31,7 +37,11 @@ case "$MODE" in
       echo "Контейнер профиля $PROFILE_ID не запущен. <app> заблокирован (kill switch)." >&2
       exit 1
     fi
-    . "$CLIENT_ENV_HELPER" "$PROFILE_ID"
+    if [ -z "$EXEC_SCRIPT" ] || [ ! -x "$EXEC_SCRIPT" ]; then
+      echo "Нет скрипта входа в namespace (network.netExec)." >&2
+      exit 1
+    fi
+    apply_env "$PROFILE_ID"
     exec sudo "$EXEC_SCRIPT" <app> "$@"
     ;;
   *)

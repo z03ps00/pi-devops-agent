@@ -3,7 +3,15 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { networkFooterLabel, resolveActiveNetwork, resolveLocal } from '../lib/devops-local.mjs';
+import {
+  addNetworkProfile,
+  networkFooterLabel,
+  readStoredNetworkId,
+  removeNetworkProfile,
+  resolveActiveNetwork,
+  resolveLocal,
+  selectNetworkProfile,
+} from '../lib/devops-local.mjs';
 
 test('the local map sets the infra root and a missing map falls back to cwd', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'devops-map-'));
@@ -42,4 +50,34 @@ test('a stored tunnel id is host unless that profile is in the map', () => {
   assert.equal(resolveActiveNetwork(map, { env: { PI_DEVOPS_NET_MODE: 'host' }, stored: 'wg' }).profile.id, 'host');
   assert.equal(networkFooterLabel(map, { label: 'WireGuard' }), 'WireGuard');
   assert.equal(networkFooterLabel({}, { label: 'WireGuard' }), '');
+});
+
+test('adding a profile writes the map and a launcher from the template', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'devops-net-'));
+  const env = { PI_CODING_AGENT_DIR: dir, PI_DEVOPS_NET_MODE: '', PI_DEVOPS_NET_MODE_FILE: path.join(dir, 'mode') };
+  const template = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), '..', '..', 'templates', 'app-launch.sh.tpl'), 'utf8');
+  const missing = addNetworkProfile(env, { label: 'Wire Guard', container: 'wg0' }, template);
+  assert.equal(missing.reason, 'need-net-exec');
+  const added = addNetworkProfile(env, { label: 'Wire Guard', container: 'wg0', netExec: path.join(dir, 'enter.sh') }, template);
+  assert.equal(added.ok, true);
+  assert.equal(added.id, 'wire-guard');
+  const script = fs.readFileSync(added.launcher, 'utf8');
+  assert.match(script, /PROFILE_ID="wire-guard"/);
+  assert.match(script, /CONTAINER="wg0"/);
+  assert.equal(script.includes('<NET_EXEC>'), false);
+  const selected = selectNetworkProfile(env, 'wire-guard');
+  assert.equal(selected.ok, true);
+  assert.equal(readStoredNetworkId(env.PI_DEVOPS_NET_MODE_FILE), 'wire-guard');
+  const removed = removeNetworkProfile(env, 'wire-guard');
+  assert.equal(removed.ok, true);
+  assert.equal(removed.modeReset, true);
+  assert.equal(fs.existsSync(added.launcher), false);
+  assert.equal(readStoredNetworkId(env.PI_DEVOPS_NET_MODE_FILE), 'host');
+  const foreign = path.join(dir, 'kept.sh');
+  fs.writeFileSync(foreign, '#!/bin/sh\n');
+  const map = JSON.parse(fs.readFileSync(path.join(dir, 'devops-local.json'), 'utf8'));
+  map.network.profiles = [{ id: 'kept', label: 'Kept', kind: 'netns', container: 'c', launcher: foreign }];
+  fs.writeFileSync(path.join(dir, 'devops-local.json'), JSON.stringify(map));
+  removeNetworkProfile(env, 'kept');
+  assert.equal(fs.existsSync(foreign), true);
 });

@@ -5,7 +5,7 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { hasLabLauncher, resolveLocal } from '../pi/lib/devops-local.mjs';
+import { addNetworkProfile, hasLabLauncher, profileIdFromLabel, removeNetworkProfile, resolveLocal, selectNetworkProfile } from '../pi/lib/devops-local.mjs';
 import { doctorReport } from '../pi/tools/doctor.mjs';
 import {
   THINKING_LEVELS,
@@ -107,25 +107,27 @@ function currentMode() {
   return network?.active?.label || 'host';
 }
 
+function profileEnv() {
+  return { ...process.env, PI_CODING_AGENT_DIR: profileDir, PI_DEVOPS_NET_MODE: '' };
+}
+
+function launchTemplate() {
+  return fs.readFileSync(path.join(repoRoot, 'templates', 'app-launch.sh.tpl'), 'utf8');
+}
+
 function setMode(id) {
-  const network = freshNetwork();
-  const profiles = Array.isArray(network?.profiles) ? network.profiles : [];
-  const known = id === 'host' || id === 'direct' || profiles.some((profile) => profile.id === id);
-  if (!known) {
+  const selected = selectNetworkProfile(profileEnv(), id);
+  if (!selected.ok) {
     output.write(`${RED}Неизвестный профиль сети: ${id}${RESET}\n`);
     return;
   }
-  const stored = id === 'direct' ? 'host' : id;
-  fs.mkdirSync(path.dirname(local.netModeFile), { recursive: true });
-  fs.writeFileSync(local.netModeFile, `${stored}\n`, { mode: 0o600 });
   const helper = local.lab?.routeraiHelper;
   const snapshot = local.lab?.modelSnapshot;
-  const chosen = profiles.find((profile) => profile.id === stored);
   if (typeof helper === 'string' && fs.existsSync(helper) && snapshot) {
-    const action = chosen?.kind === 'netns' ? 'restore' : 'apply-direct';
+    const action = selected.kind === 'netns' ? 'restore' : 'apply-direct';
     spawnSync(process.execPath, [helper, 'pi-model', action, settingsJson, snapshot], { stdio: 'inherit' });
   }
-  output.write(`${GREEN}Профиль сети для следующего запуска: ${chosen?.label || 'host'}${RESET}\n`);
+  output.write(`${GREEN}Профиль сети для следующего запуска: ${selected.label}${RESET}\n`);
 }
 
 function ensureBackupDir() {
@@ -255,6 +257,43 @@ async function diagnosticsScreen(rl) {
   await pause(rl);
 }
 
+async function addNetFromPanel(rl) {
+  const label = (await rl.question('Подпись профиля: ')).trim();
+  if (!label) return;
+  const typed = (await rl.question('Id (пусто — из подписи): ')).trim();
+  const container = (await rl.question('Имя контейнера: ')).trim();
+  if (!container) return;
+  const env = profileEnv();
+  let netExec = String(resolveLocal(env, repoRoot).map?.network?.netExec || '');
+  if (!netExec) netExec = (await rl.question('Путь к скрипту входа в namespace: ')).trim();
+  const saved = addNetworkProfile(env, { label, id: typed || profileIdFromLabel(label), container, netExec }, launchTemplate());
+  if (!saved.ok) {
+    const reason = saved.reason === 'need-net-exec'
+      ? 'Нужен путь к скрипту входа в namespace (network.netExec).'
+      : `Профиль не записан: ${saved.reason}`;
+    output.write(`${RED}${reason}${RESET}\n`);
+    return;
+  }
+  output.write(`${GREEN}Профиль ${saved.label} записан.${RESET} ${saved.launcher}\n`);
+}
+
+async function removeNetFromPanel(rl) {
+  const profiles = freshNetwork()?.profiles || [];
+  if (!profiles.length) {
+    output.write(`${YELLOW}Удалять нечего.${RESET}\n`);
+    return;
+  }
+  profiles.forEach((profile, index) => output.write(` [${index + 1}] ${profile.label}\n`));
+  const picked = profiles[Number(await rl.question('Номер профиля: ')) - 1];
+  if (!picked) return;
+  const removed = removeNetworkProfile(profileEnv(), picked.id);
+  if (!removed.ok) {
+    output.write(`${RED}Не удалось удалить: ${removed.reason}${RESET}\n`);
+    return;
+  }
+  output.write(`${GREEN}Профиль ${removed.id} удалён.${RESET}\n`);
+}
+
 async function networkMenu(rl) {
   while (true) {
     const profiles = freshNetwork()?.profiles || [];
@@ -267,11 +306,15 @@ async function networkMenu(rl) {
       boxLine(` Сейчас для следующего запуска: ${currentMode()}`),
       boxDash(),
       ...choices.map((profile, index) => boxLine(` [${index + 1}] ${profile.label}`)),
+      boxLine(' [a] Добавить профиль'),
+      boxLine(' [d] Удалить профиль'),
       boxLine(' [0] Назад'),
       boxBottom(),
     ]);
-    const choice = await rl.question(`\n${BOLD}Выбор:${RESET} `);
+    const choice = (await rl.question(`\n${BOLD}Выбор:${RESET} `)).trim().toLowerCase();
     if (choice === '0' || choice === '') return;
+    if (choice === 'a') { await addNetFromPanel(rl); await pause(rl); continue; }
+    if (choice === 'd') { await removeNetFromPanel(rl); await pause(rl); continue; }
     const picked = choices[Number(choice) - 1];
     if (!picked) {
       output.write(`${RED}Неверный выбор${RESET}\n`);

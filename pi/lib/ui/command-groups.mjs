@@ -172,6 +172,7 @@ export function filterCommandSections(sections, query) {
 /** Empty invocation opens an overlay. Choosing one in the groups list runs it. */
 export const PICKER_COMMAND_ACTIONS = Object.freeze({
   mode: 'command:mode',
+  net: 'command:net',
   learning: 'command:learning',
   anon: 'command:anon',
   approve: 'command:approve',

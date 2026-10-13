@@ -1,6 +1,9 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
 import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { evaluatePlanMcpCall, evaluateReadOnlyToolCall, getReadOnlyVisibleTools, isRecallMcpCall } from "../../lib/devops-plan-policy.mjs";
 import { acceptPlan, completeBuild, enterAsk, enterBuild, enterPlan, executePlan, extractPlanArtifact, initialModeState, isReadOnlyMode, sanitizeModeState } from "../../lib/devops-plan-state.mjs";
 import { classifyBashMutation } from "../../lib/devops-plan-policy.mjs";
@@ -12,6 +15,9 @@ import { classifyBashMutation } from "../../lib/devops-plan-policy.mjs";
 import * as planStateLib from "../../lib/devops-plan-state.mjs";
 import * as planPolicyLib from "../../lib/devops-plan-policy.mjs";
 import { resolveLocal } from "../../lib/devops-local.mjs";
+// `/reload` keeps the already-imported devops-local.mjs. A named import of a
+// function added later is undefined. This URL is new on every extension load.
+const localApiPromise = import(new URL(`../../lib/devops-local.mjs?net=${Date.now()}`, import.meta.url).href);
 import { getSnapshot, publish, registerAction, uiAvailable } from "../../lib/ui/index.mjs";
 import { APPROVE_ALL, APPROVE_DENY, APPROVE_ONCE, summarizeToolAction } from "../../lib/ui/approval.mjs";
 import {
@@ -26,7 +32,7 @@ import {
   shouldPrompt,
 } from "../../lib/approve-policy.mjs";
 import { setDevopsMode } from "../../lib/mode-state.mjs";
-import { overlayAnonSelect, overlayApproval, overlayApproveSelect, overlayCavemanSelect, overlayModeSelect } from "../devops-ui/overlays.ts";
+import { overlayAnonSelect, overlayApproval, overlayApproveSelect, overlayCavemanSelect, overlayModeSelect, pickOverlay } from "../devops-ui/overlays.ts";
 
 type DevopsMode = "plan" | "build" | "ask";
 type DevopsPhase = "build-idle" | "plan-draft" | "plan-ready" | "ask-idle" | "build-executing";
@@ -779,6 +785,132 @@ export default function devopsModeExtension(pi: ExtensionAPI): void {
   });
   registerAction("command:mode", (args: unknown, ctx: unknown) => handleMode(actionArgs(args, ctx), actionCtx(args, ctx)));
   registerAction("mode-select", (ctx: ExtensionContext) => handleMode(undefined, ctx));
+
+  function launchTemplate(): string {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    return fs.readFileSync(path.resolve(here, "..", "..", "..", "templates", "app-launch.sh.tpl"), "utf8");
+  }
+
+  function rememberModelRoute(kind: string): void {
+    const here = sessionLocal();
+    const helper = here.lab?.routeraiHelper;
+    const snapshot = here.lab?.modelSnapshot;
+    if (typeof helper !== "string" || !helper || !snapshot || !fs.existsSync(helper)) return;
+    const action = kind === "netns" ? "restore" : "apply-direct";
+    spawnSync(process.execPath, [helper, "pi-model", action, path.join(here.profile, "settings.json"), snapshot], { stdio: "inherit" });
+  }
+
+  async function askLine(ctx: ExtensionContext, title: string): Promise<string> {
+    if (typeof ctx.ui?.input !== "function") return "";
+    const value = await ctx.ui.input(title);
+    return value == null ? "" : String(value).trim();
+  }
+
+  async function pickNet(ctx: ExtensionContext): Promise<string | undefined> {
+    const api = await localApiPromise;
+    const local = typeof api.resolveLocal === "function" ? api.resolveLocal(process.env) : sessionLocal();
+    const profiles = local.network?.profiles || [];
+    const items = [
+      { value: "host", label: "host", description: "обычная сеть" },
+      ...profiles.map((profile: { id: string; label: string; container?: string }) => ({
+        value: profile.id,
+        label: profile.label,
+        description: profile.container || profile.id,
+      })),
+      { value: "__add", label: "Добавить", description: "новый сетевой профиль" },
+      { value: "__remove", label: "Удалить", description: "убрать профиль из карты" },
+    ];
+    if (uiAvailable(ctx)) return pickOverlay(ctx, "Сеть", items, "Выбор действует на следующий запуск.");
+    if (typeof ctx.ui?.select === "function") return (await ctx.ui.select("Сеть", items.map((item) => item.value))) || undefined;
+    return undefined;
+  }
+
+  async function chooseStoredProfile(id: string, ctx: ExtensionContext): Promise<void> {
+    const api = await localApiPromise;
+    const selected = api.selectNetworkProfile(process.env, id);
+    if (!selected?.ok) {
+      ctx.ui.notify(`Неизвестный профиль сети: ${id}`, "error");
+      return;
+    }
+    rememberModelRoute(selected.kind);
+    ctx.ui.notify(`Профиль сети для следующего запуска: ${selected.label}. Этот чат остаётся в текущей сети.`, "info");
+  }
+
+  async function addNetProfile(ctx: ExtensionContext): Promise<void> {
+    const api = await localApiPromise;
+    const label = await askLine(ctx, "Подпись профиля");
+    if (!label) return;
+    const typed = await askLine(ctx, "Id (пусто — из подписи)");
+    const slug = typeof api.profileIdFromLabel === "function" ? api.profileIdFromLabel(label) : "";
+    const id = typed || slug;
+    const container = await askLine(ctx, "Имя контейнера");
+    if (!container) return;
+    const local = typeof api.resolveLocal === "function" ? api.resolveLocal(process.env) : sessionLocal();
+    let netExec = String(local.map?.network?.netExec || "");
+    if (!netExec) netExec = await askLine(ctx, "Путь к скрипту входа в namespace");
+    const saved = api.addNetworkProfile(process.env, { label, id, container, netExec }, launchTemplate());
+    if (!saved.ok) {
+      const reason = saved.reason === "need-net-exec"
+        ? "Нужен путь к скрипту входа в namespace (network.netExec)."
+        : `Профиль не записан: ${saved.reason}`;
+      ctx.ui.notify(reason, "error");
+      return;
+    }
+    ctx.ui.notify(`Профиль ${saved.label} записан. Лаунчер: ${saved.launcher}`, "info");
+  }
+
+  async function removeNetProfile(ctx: ExtensionContext): Promise<void> {
+    const profiles = sessionLocal().network?.profiles || [];
+    if (!profiles.length) {
+      ctx.ui.notify("Удалять нечего.", "info");
+      return;
+    }
+    const items = profiles.map((profile: { id: string; label: string }) => ({ value: profile.id, label: profile.label, description: profile.id }));
+    const id = uiAvailable(ctx)
+      ? await pickOverlay(ctx, "Удалить профиль", items, "host и чужой лаунчер не удаляются.")
+      : await ctx.ui.select?.("Удалить профиль", items.map((item) => item.value));
+    if (!id) return;
+    const api = await localApiPromise;
+    const removed = api.removeNetworkProfile(process.env, id);
+    if (!removed.ok) {
+      ctx.ui.notify(`Не удалось удалить: ${removed.reason}`, "error");
+      return;
+    }
+    ctx.ui.notify(removed.modeReset ? `Профиль ${removed.id} удалён. Следующий запуск — host.` : `Профиль ${removed.id} удалён.`, "info");
+  }
+
+  async function handleNet(args: string | undefined, ctx: ExtensionContext): Promise<void> {
+    const requested = String(args ?? "").trim();
+    if (requested && requested !== "add" && requested !== "remove") {
+      await chooseStoredProfile(requested, ctx);
+      return;
+    }
+    if (requested === "add") {
+      await addNetProfile(ctx);
+      return;
+    }
+    if (requested === "remove") {
+      await removeNetProfile(ctx);
+      return;
+    }
+    const picked = await pickNet(ctx);
+    if (!picked) return;
+    if (picked === "__add") {
+      await addNetProfile(ctx);
+      return;
+    }
+    if (picked === "__remove") {
+      await removeNetProfile(ctx);
+      return;
+    }
+    await chooseStoredProfile(picked, ctx);
+  }
+
+  pi.registerCommand("net", {
+    description: "Сеть: /net, /net <id>, /net add, /net remove. Пустой вызов открывает выбор",
+    handler: handleNet,
+  });
+  registerAction("command:net", (args: unknown, ctx: unknown) => handleNet(actionArgs(args, ctx), actionCtx(args, ctx)));
 
   pi.registerCommand("devops-plan", { description: "Start a new DevOps PLAN workflow", handler: async (_args, ctx) => switchToPlan(ctx) });
   pi.registerCommand("devops-build", { description: "Switch to DevOps BUILD mode", handler: async (_args, ctx) => switchToBuild(ctx) });

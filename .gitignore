@@ -11,6 +11,7 @@ models-store.json
 cursor-sdk*.json
 devops-local.json
 lab/
+network/
 state/
 sessions/
 sessions-*/
